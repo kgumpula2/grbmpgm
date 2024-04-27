@@ -95,14 +95,27 @@ def save_gif_fancy(imgs, nrow, save_name):
              loop=0)
 
 
-def visualize_sampling(model, epoch, config, tag=None, is_show_gif=True):
+def visualize_sampling(model, epoch, config, tag=None, is_show_gif=True, test_loader=None):
     tag = '' if tag is None else tag
     B, C, H, W = config['sampling_batch_size'], config['channel'], config[
         'height'], config['width']
-    v_init = torch.randn(B, C, H, W).cuda()
+    if test_loader:
+        v_init, _ = next(iter(test_loader))
+        v_init = v_init.cuda()
+        if config['mask']:
+            mask = torch.zeros(B, C, H, W).cuda()
+            if config['mask'] == 'top_half':
+                mask[:, :, H // 2:, :] = 1
+            v_init *= mask
+        else:
+            mask = None
+    else:
+        v_init = torch.randn(B, C, H, W).cuda()
     v_list = model.sampling(v_init,
                             num_steps=config['sampling_steps'],
-                            save_gap=config['sampling_gap'])
+                            save_gap=config['sampling_gap'],
+                            mask=mask,
+                            v_true=v_init)
 
     if 'GMM' in config['dataset']:
         samples = v_list[-1][1].view(B, -1).cpu().numpy()

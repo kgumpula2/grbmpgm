@@ -16,7 +16,7 @@
     "Langevin_eta": 20.0,
     "Langevin_adjust_warmup_epoch": 0,
     "Langevin_adjust_step": 100,
-    "inference_method": "Gibbs-Langevin",
+    "inference_method": "Gibbs",
     "sampling_batch_size": 100,
     "sampling_steps": 100,
     "sampling_gap": 5,
@@ -30,7 +30,9 @@
     "img_std": [
         0.30809998512268066
     ],
-    "log_interval": 10,
+    "log_interval": 1,
     "save_interval": 100,
-    "hidden_size": 4096
+    "hidden_size": 4096,
+    "mask": "top_half",
+    "do_inpainting": true
 }

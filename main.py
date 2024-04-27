@@ -10,6 +10,10 @@ from tqdm import tqdm
 from utils import setup_logging, vis_density_GMM, vis_2D_samples, visualize_sampling
 from gmm import GMM, GMMDataset
 from grbm import GRBM
+import matplotlib.pyplot as plt
+import matplotlib
+
+# matplotlib.use('TkAgg')
 
 EPS = 1e-7
 SEED = 1234
@@ -76,6 +80,14 @@ def create_dataset(config):
                                        transforms.Normalize(config['img_mean'],
                                                             config['img_std'])
                                    ]))
+        test_set = datasets.MNIST('./data',
+                                   train=False,
+                                   download=True,
+                                   transform=transforms.Compose([
+                                       transforms.ToTensor(),
+                                       transforms.Normalize(config['img_mean'],
+                                                            config['img_std'])
+                                   ]))
     elif config['dataset'] == 'CelebA':
         train_set = datasets.CelebA('./data',
                                     split='train',
@@ -115,7 +127,7 @@ def create_dataset(config):
         config['img_mean'] = torch.tensor(config['img_mean'])
         config['img_std'] = torch.tensor(config['img_std'])
 
-    return train_set
+    return train_set, test_set
 
 
 def train_model(args):
@@ -140,10 +152,16 @@ def train_model(args):
 
     config['visible_size'] = config['height'] * \
         config['width'] * config['channel']
-    train_set = create_dataset(config)
+    train_set, test_set = create_dataset(config)
     train_loader = torch.utils.data.DataLoader(train_set,
                                                batch_size=config['batch_size'],
                                                shuffle=True)
+    if config['do_inpainting']: 
+        test_loader = torch.utils.data.DataLoader(test_set,
+                                                  batch_size=config['sampling_batch_size'],
+                                                  shuffle=False)
+    else:
+        test_loader = None
 
     model = GRBM(config['visible_size'],
                  config['hidden_size'],
@@ -213,7 +231,8 @@ def train_model(args):
             visualize_sampling(model,
                                epoch,
                                config,
-                               is_show_gif=config['is_vis_verbose'])
+                               is_show_gif=config['is_vis_verbose'],
+                               test_loader=test_loader)
 
             # visualize one mini-batch of training data
             if not is_show_training_data and 'GMM' not in config['dataset']:

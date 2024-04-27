@@ -168,7 +168,7 @@ class GRBM(nn.Module):
         return eng_diff + proposal_eng_new - proposal_eng_old
 
     @torch.no_grad()
-    def Gibbs_sampling_vh(self, v, num_steps=10, burn_in=0):
+    def Gibbs_sampling_vh(self, v, num_steps=10, burn_in=0, mask=None, v_true=None):
         samples, var = [], self.get_var()
         std = var.sqrt()
         h = torch.bernoulli(self.prob_h_given_v(v, var))
@@ -177,6 +177,9 @@ class GRBM(nn.Module):
             mu = self.prob_v_given_h(h)
             v = mu + torch.randn_like(mu) * std
 
+            if mask is not None and v_true is not None:
+                v = torch.where(mask == 1, v_true, v)
+            
             # forward sampling
             h = torch.bernoulli(self.prob_h_given_v(v, var))
 
@@ -269,14 +272,14 @@ class GRBM(nn.Module):
         return F.mse_loss(v, v_bar)
 
     @torch.no_grad()
-    def sampling(self, v_init, num_steps=1, save_gap=1):
+    def sampling(self, v_init, num_steps=1, save_gap=1, mask=None, v_true=None):
         v_shape = v_init.shape
         v = v_init.view(v_shape[0], -1)
         var = self.get_var()
         var_mean = var.mean().item()
 
         if self.inference_method == 'Gibbs':
-            samples = self.Gibbs_sampling_vh(v, num_steps=num_steps - 1)
+            samples = self.Gibbs_sampling_vh(v, num_steps=num_steps - 1, mask=mask.view(v_shape[0], -1), v_true=v_true.view(v_shape[0], -1))
             samples = [xx[0] for xx in samples]  # extract v
         elif self.inference_method == 'Langevin':
             samples = self.Langevin_sampling_v(v,
@@ -349,6 +352,7 @@ class GRBM(nn.Module):
     @torch.no_grad()
     def CD_grad(self, v):
         v = v.view(v.shape[0], -1)
+
         # postive gradient
         grad_pos = self.positive_grad(v)
 
