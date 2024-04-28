@@ -105,8 +105,20 @@ def visualize_sampling(model, epoch, config, tag=None, is_show_gif=True, test_lo
         if config['mask']:
             mask = torch.zeros(B, C, H, W).cuda()
             if config['mask'] == 'top_half':
+                mask[:, :, :H // 2, :] = 1
+            elif config['mask'] == 'bottom_half':
                 mask[:, :, H // 2:, :] = 1
-            v_init *= mask
+            elif config['mask'] == 'left_half':
+                mask[:, :, :, :W // 2] = 1
+            elif config['mask'] == 'right_half':
+                mask[:, :, :, W // 2:] = 1
+            elif config['mask'] == 'center':
+                # half of side of square
+                center_crop_pixel = 5
+                mask[:, :, H // 2 - center_crop_pixel:H // 2 + center_crop_pixel, W // 2 - center_crop_pixel:W // 2 + center_crop_pixel] = 1
+
+            noise = torch.randn_like(v_init) if config['randomize_mask'] else torch.zeros(B, C, H, W)
+            v_init = torch.where(mask == 1, noise.cuda(), v_init)
         else:
             mask = None
     else:

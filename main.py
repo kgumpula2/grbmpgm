@@ -10,8 +10,6 @@ from tqdm import tqdm
 from utils import setup_logging, vis_density_GMM, vis_2D_samples, visualize_sampling
 from gmm import GMM, GMMDataset
 from grbm import GRBM
-import matplotlib.pyplot as plt
-import matplotlib
 
 # matplotlib.use('TkAgg')
 

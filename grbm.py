@@ -3,6 +3,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from utils import cosine_schedule
+import matplotlib.pyplot as plt
+import matplotlib
+
+matplotlib.use('TkAgg')
 
 class GRBM(nn.Module):
     """ Gaussian-Bernoulli Restricted Boltzmann Machines (GRBM) """
@@ -178,7 +182,7 @@ class GRBM(nn.Module):
             v = mu + torch.randn_like(mu) * std
 
             if mask is not None and v_true is not None:
-                v = torch.where(mask == 1, v_true, v)
+                v = torch.where(mask == 0, v_true, v)
             
             # forward sampling
             h = torch.bernoulli(self.prob_h_given_v(v, var))
@@ -195,7 +199,9 @@ class GRBM(nn.Module):
                             eta=1.0e+0,
                             burn_in=0,
                             is_anneal=True,
-                            adjust_step=0):
+                            adjust_step=0,
+                            mask=None,
+                            v_true=None):
         eta_list = cosine_schedule(eta_max=eta, T=num_steps)
         samples = []
 
@@ -205,6 +211,9 @@ class GRBM(nn.Module):
 
             v_new = v - eta_ii * grad_v + \
                 torch.randn_like(v) * np.sqrt(eta_ii * 2)
+            
+            if mask is not None and v_true is not None:
+                v_new = torch.where(mask == 0, v_true, v_new)
 
             if ii >= adjust_step:
                 tmp_u = torch.rand(v.shape[0]).to(v.device)
@@ -230,7 +239,9 @@ class GRBM(nn.Module):
                                    eta=1.0e+0,
                                    burn_in=0,
                                    is_anneal=True,
-                                   adjust_step=0):
+                                   adjust_step=0,
+                                   mask=None,
+                                   v_true=None):
         samples, var = [], self.get_var()
         eta_list = cosine_schedule(eta_max=eta, T=num_steps_Langevin)
 
@@ -244,6 +255,9 @@ class GRBM(nn.Module):
                 grad_v = self.energy_grad_v(v, h)
                 v = v - eta_jj * grad_v + \
                     torch.randn_like(v) * np.sqrt(eta_jj * 2)
+                
+            if mask is not None and v_true is not None:
+                v = torch.where(mask == 0, v_true, v)
 
             # forward sampling
             h = torch.bernoulli(self.prob_h_given_v(v, var))
@@ -277,16 +291,20 @@ class GRBM(nn.Module):
         v = v_init.view(v_shape[0], -1)
         var = self.get_var()
         var_mean = var.mean().item()
+        mask = mask.view(v_shape[0], -1) if mask is not None else None
+        v_true = v_true.view(v_shape[0], -1) if v_true is not None else None
 
         if self.inference_method == 'Gibbs':
-            samples = self.Gibbs_sampling_vh(v, num_steps=num_steps - 1, mask=mask.view(v_shape[0], -1), v_true=v_true.view(v_shape[0], -1))
+            samples = self.Gibbs_sampling_vh(v, num_steps=num_steps - 1, mask=mask, v_true=v_true)
             samples = [xx[0] for xx in samples]  # extract v
         elif self.inference_method == 'Langevin':
             samples = self.Langevin_sampling_v(v,
                                                num_steps=num_steps - 1,
                                                eta=self.Langevin_eta * var_mean,
                                                is_anneal=self.is_anneal_Langevin,
-                                               adjust_step=self.Langevin_adjust_step)
+                                               adjust_step=self.Langevin_adjust_step,
+                                               mask=mask,
+                                               v_true=v_true)
         elif self.inference_method == 'Gibbs-Langevin':
             samples = self.Gibbs_Langevin_sampling_vh(
                 v,
@@ -294,7 +312,9 @@ class GRBM(nn.Module):
                 num_steps_Langevin=self.Langevin_step,
                 eta=self.Langevin_eta * var_mean,
                 is_anneal=self.is_anneal_Langevin,
-                adjust_step=self.Langevin_adjust_step)
+                adjust_step=self.Langevin_adjust_step,
+                mask=mask,
+                v_true=v_true)
             samples = [xx[0] for xx in samples]  # extract v
 
         # use conditional mean as the last sample
@@ -304,6 +324,11 @@ class GRBM(nn.Module):
                                   for ii in range(num_steps - 1)
                                   if (ii + 1) % save_gap == 0
                                   ] + [(num_steps, mu.view(v_shape).detach())]
+        
+        for i in range(len(v_list)):
+            ind, v = v_list[i]
+            if mask is not None and v_true is not None:
+                v_list[i] = (ind, torch.where(mask.view(v_shape) == 0, v_true.view(v_shape), v))
 
         return v_list
 

@@ -33,6 +33,7 @@
     "log_interval": 1,
     "save_interval": 100,
     "hidden_size": 4096,
-    "mask": "top_half",
+    "mask": "center",
+    "randomize_mask": true,
     "do_inpainting": true
 }
