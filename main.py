@@ -254,6 +254,8 @@ def train_model(args):
                     f'PID={pid} || {epoch} epoch || var={model.get_var().mean().item()} || Reconstruction Loss = {recon_loss}'
                 )
                 wandb.log({"epoch": epoch, "reconstruction_loss": recon_loss, "var": var})
+                if test_loader is not None:
+                    visualize_sampling(model, epoch, config, is_show_gif=False, test_loader=test_loader, shortcut_mse_calculation=True)
 
         if epoch % config['vis_interval'] == 0:
             visualize_sampling(model,
@@ -311,3 +313,4 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     train_model(args)
+    wandb.finish()

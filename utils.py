@@ -99,7 +99,7 @@ def save_gif_fancy(imgs, nrow, save_name):
              loop=0)
     
 
-def calc_mask_accuracy(epoch, samples, mask, v_true):
+def calc_mask_mse_loss(epoch, samples, mask, v_true):
     # only calculate MSE loss for region where mask == 1
     samples_masked = samples[mask == 1]
     v_true_masked = v_true[mask == 1]
@@ -107,7 +107,7 @@ def calc_mask_accuracy(epoch, samples, mask, v_true):
     wandb.log({"epoch": epoch, "l2 mask loss": F.mse_loss(samples_masked, v_true_masked).item()})
 
 
-def visualize_sampling(model, epoch, config, tag=None, is_show_gif=True, test_loader=None):
+def visualize_sampling(model, epoch, config, tag=None, is_show_gif=True, test_loader=None, shortcut_mse_calculation=False):
     tag = '' if tag is None else tag
     B, C, H, W = config['sampling_batch_size'], config['channel'], config[
         'height'], config['width']
@@ -146,7 +146,11 @@ def visualize_sampling(model, epoch, config, tag=None, is_show_gif=True, test_lo
                             v_true=v_true)
     
     if test_loader and mask is not None:
-        calc_mask_accuracy(epoch, v_list[-1][1], mask, v_true)
+        calc_mask_mse_loss(epoch, v_list[-1][1], mask, v_true)
+
+        if shortcut_mse_calculation:
+            return
+
         save_folder = f"{config['exp_folder']}/final_images"
         if epoch % config['save_interval'] == 0:
             if not os.path.exists(save_folder):
