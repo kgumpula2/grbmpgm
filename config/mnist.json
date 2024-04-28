@@ -31,9 +31,10 @@
         0.30809998512268066
     ],
     "log_interval": 1,
+    "vis_interval": 5,
     "save_interval": 100,
     "hidden_size": 4096,
-    "mask": "center",
+    "mask": "top_half",
     "randomize_mask": true,
     "do_inpainting": true
 }

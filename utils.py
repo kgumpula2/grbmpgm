@@ -9,6 +9,8 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt  # NOQA
 from PIL import Image  # NOQA
+import wandb
+import torch.nn.functional as F
 
 sns.set_theme(style="darkgrid")
 
@@ -93,6 +95,14 @@ def save_gif_fancy(imgs, nrow, save_name):
              save_all=True,
              duration=400,
              loop=0)
+    
+
+def calc_mask_accuracy(epoch, samples, mask, v_true):
+    # only calculate MSE loss for region where mask == 1
+    samples_masked = samples[mask == 1]
+    v_true_masked = v_true[mask == 1]
+
+    wandb.log({"epoch": epoch, "l2 mask loss": F.mse_loss(samples_masked, v_true_masked).item()})
 
 
 def visualize_sampling(model, epoch, config, tag=None, is_show_gif=True, test_loader=None):
@@ -100,8 +110,8 @@ def visualize_sampling(model, epoch, config, tag=None, is_show_gif=True, test_lo
     B, C, H, W = config['sampling_batch_size'], config['channel'], config[
         'height'], config['width']
     if test_loader:
-        v_init, _ = next(iter(test_loader))
-        v_init = v_init.cuda()
+        v_true, _ = next(iter(test_loader))
+        v_true = v_true.cuda()
         if config['mask']:
             mask = torch.zeros(B, C, H, W).cuda()
             if config['mask'] == 'top_half':
@@ -119,18 +129,22 @@ def visualize_sampling(model, epoch, config, tag=None, is_show_gif=True, test_lo
             else:
                 raise ValueError(f"Unknown mask type: {config['mask']}")
 
-            noise = torch.randn_like(v_init) if config['randomize_mask'] else torch.zeros(B, C, H, W)
-            v_init = torch.where(mask == 1, noise.cuda(), v_init)
+            noise = torch.randn_like(v_true) if config['randomize_mask'] else torch.zeros(B, C, H, W)
+            v_init = torch.where(mask == 1, noise.cuda(), v_true)
         else:
             mask = None
     else:
         v_init = torch.randn(B, C, H, W).cuda()
         mask = None
+        v_true = None
     v_list = model.sampling(v_init,
                             num_steps=config['sampling_steps'],
                             save_gap=config['sampling_gap'],
                             mask=mask,
-                            v_true=v_init)
+                            v_true=v_true)
+    
+    if test_loader and mask is not None:
+        calc_mask_accuracy(epoch, v_list[-1][1], mask, v_true)
 
     if 'GMM' in config['dataset']:
         samples = v_list[-1][1].view(B, -1).cpu().numpy()
@@ -143,6 +157,7 @@ def visualize_sampling(model, epoch, config, tag=None, is_show_gif=True, test_lo
             save_gif_fancy(
                 v_list, config['sampling_nrow'],
                 f"{config['exp_folder']}/sample_imgs_epoch_{epoch:05d}{tag}.gif")
+            wandb.log({f"sample_imgs_epoch_{epoch:05d}{tag}.gif": wandb.Image(f"{config['exp_folder']}/sample_imgs_epoch_{epoch:05d}{tag}.gif"), 'epoch': epoch})
             img_vis = v_list[-1][1]
         else:
             if isinstance(config['img_std'], torch.Tensor):
@@ -161,6 +176,7 @@ def visualize_sampling(model, epoch, config, tag=None, is_show_gif=True, test_lo
                             padding=1,
                             pad_value=1.0).cpu(),
             f"{config['exp_folder']}/sample_imgs_epoch_{epoch:05d}{tag}.png")
+        wandb.log({f"sample_imgs_epoch_{epoch:05d}{tag}.png": wandb.Image(f"{config['exp_folder']}/sample_imgs_epoch_{epoch:05d}{tag}.png"), 'epoch': epoch})
 
 
 def vis_2D_samples(samples, config, tags=None):

@@ -10,6 +10,8 @@ from tqdm import tqdm
 from utils import setup_logging, vis_density_GMM, vis_2D_samples, visualize_sampling
 from gmm import GMM, GMMDataset
 from grbm import GRBM
+import wandb
+import torch.nn.functional as F
 
 # matplotlib.use('TkAgg')
 
@@ -142,6 +144,17 @@ def train_model(args):
     with open(f'config/{args.dataset}.json') as json_file:
         config = json.load(json_file)
 
+
+    # start a new wandb run to track this script
+    wandb.init(
+        # set the wandb project where this run will be logged
+        project="PGM",
+        # track hyperparameters and run metadata
+        config=config,
+        # disable
+        # mode="disabled",
+    )
+
     # kludgey check for inpainting config
     if 'do_inpainting' not in config:
         config['do_inpainting'] = False
@@ -240,12 +253,14 @@ def train_model(args):
                 logger.info(
                     f'PID={pid} || {epoch} epoch || var={model.get_var().mean().item()} || Reconstruction Loss = {recon_loss}'
                 )
+                wandb.log({"epoch": epoch, "reconstruction_loss": recon_loss, "var": var})
 
+        if epoch % config['vis_interval'] == 0:
             visualize_sampling(model,
-                               epoch,
-                               config,
-                               is_show_gif=True,
-                               test_loader=test_loader)
+                                epoch,
+                                config,
+                                is_show_gif=True,
+                                test_loader=test_loader)
 
             # visualize one mini-batch of training data
             if not is_show_training_data and 'GMM' not in config['dataset']:
@@ -265,7 +280,7 @@ def train_model(args):
             # visualize filters & hidden states
             if config['is_vis_verbose']:
                 filters = model.W.T.view(model.W.shape[1], config['channel'],
-                                         config['height'], config['width'])
+                                            config['height'], config['width'])
                 utils.save_image(
                     filters,
                     f"{config['exp_folder']}/filters_epoch_{epoch:05d}.png",
@@ -279,8 +294,8 @@ def train_model(args):
                 h_pos = model.prob_h_given_v(
                     data.view(data.shape[0], -1).cuda(), model.get_var())
                 utils.save_image(h_pos.view(1, 1, -1, config['hidden_size']),
-                                 f"{config['exp_folder']}/hidden_epoch_{epoch:05d}.png",
-                                 normalize=True)
+                                    f"{config['exp_folder']}/hidden_epoch_{epoch:05d}.png",
+                                    normalize=True)
 
         # save models periodically
         if epoch % config['save_interval'] == 0:
@@ -294,4 +309,5 @@ if __name__ == '__main__':
     parser.add_argument('-d', '--dataset', type=str, default='mnist',
                         help='Dataset name {gmm_iso, gmm_aniso, mnist, fashionmnist, celeba, celeba2K}')
     args = parser.parse_args()
+
     train_model(args)
