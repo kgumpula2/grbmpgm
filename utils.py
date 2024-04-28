@@ -116,6 +116,8 @@ def visualize_sampling(model, epoch, config, tag=None, is_show_gif=True, test_lo
                 # half of side of square
                 center_crop_pixel = 5
                 mask[:, :, H // 2 - center_crop_pixel:H // 2 + center_crop_pixel, W // 2 - center_crop_pixel:W // 2 + center_crop_pixel] = 1
+            else:
+                raise ValueError(f"Unknown mask type: {config['mask']}")
 
             noise = torch.randn_like(v_init) if config['randomize_mask'] else torch.zeros(B, C, H, W)
             v_init = torch.where(mask == 1, noise.cuda(), v_init)
@@ -123,6 +125,7 @@ def visualize_sampling(model, epoch, config, tag=None, is_show_gif=True, test_lo
             mask = None
     else:
         v_init = torch.randn(B, C, H, W).cuda()
+        mask = None
     v_list = model.sampling(v_init,
                             num_steps=config['sampling_steps'],
                             save_gap=config['sampling_gap'],
@@ -135,6 +138,7 @@ def visualize_sampling(model, epoch, config, tag=None, is_show_gif=True, test_lo
         vis_density_GRBM(model, config, epoch=epoch)
     else:
         if is_show_gif:
+            print("hah")
             v_list = unnormalize_img_tuple(v_list, config['img_mean'],
                                            config['img_std'])
             save_gif_fancy(

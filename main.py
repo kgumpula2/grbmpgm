@@ -120,7 +120,14 @@ def create_dataset(config):
                                               transforms.Normalize(config['img_mean'],
                                                                    config['img_std'])
                                           ]))
-
+        test_set = datasets.FashionMNIST('./data',
+                                          train=False,
+                                          download=True,
+                                          transform=transforms.Compose([
+                                              transforms.ToTensor(),
+                                              transforms.Normalize(config['img_mean'],
+                                                                   config['img_std'])
+                                          ]))
     if 'GMM' not in config['dataset']:
         config['img_mean'] = torch.tensor(config['img_mean'])
         config['img_std'] = torch.tensor(config['img_std'])
@@ -135,8 +142,16 @@ def train_model(args):
     with open(f'config/{args.dataset}.json') as json_file:
         config = json.load(json_file)
 
-    config['exp_folder'] = f"exp/{config['dataset']}_{config['model']}_{pid}_inference={config['inference_method']}_H={config['hidden_size']}_B={config['batch_size']}_CD={config['CD_step']}"
+    # kludgey check for inpainting config
+    if 'do_inpainting' not in config:
+        config['do_inpainting'] = False
+    if 'mask' not in config:
+        config['mask'] = None
+    if 'randomize_mask' not in config:
+        config['randomize_mask'] = False
 
+    config['exp_folder'] = f"exp/inpainting={config['do_inpainting']}_{config['dataset']}_{config['model']}_{pid}_inference={config['inference_method']}_H={config['hidden_size']}_B={config['batch_size']}_CD={config['CD_step']}"
+    
     if not os.path.isdir(config['exp_folder']):
         os.makedirs(config['exp_folder'])
 
@@ -229,7 +244,7 @@ def train_model(args):
             visualize_sampling(model,
                                epoch,
                                config,
-                               is_show_gif=config['is_vis_verbose'],
+                               is_show_gif=True,
                                test_loader=test_loader)
 
             # visualize one mini-batch of training data
