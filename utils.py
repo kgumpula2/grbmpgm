@@ -138,7 +138,6 @@ def visualize_sampling(model, epoch, config, tag=None, is_show_gif=True, test_lo
         vis_density_GRBM(model, config, epoch=epoch)
     else:
         if is_show_gif:
-            print("hah")
             v_list = unnormalize_img_tuple(v_list, config['img_mean'],
                                            config['img_std'])
             save_gif_fancy(
