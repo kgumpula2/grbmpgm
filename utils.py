@@ -9,8 +9,10 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt  # NOQA
 from PIL import Image  # NOQA
+import torchvision.transforms as transforms
 import wandb
 import torch.nn.functional as F
+import os
 
 sns.set_theme(style="darkgrid")
 
@@ -145,6 +147,29 @@ def visualize_sampling(model, epoch, config, tag=None, is_show_gif=True, test_lo
     
     if test_loader and mask is not None:
         calc_mask_accuracy(epoch, v_list[-1][1], mask, v_true)
+        save_folder = f"{config['exp_folder']}/final_images"
+        if epoch % config['save_interval'] == 0:
+            if not os.path.exists(save_folder):
+                os.makedirs(f"{save_folder}/gt")
+                os.makedirs(f"{save_folder}/inpainted")
+
+            # save v_list[-1][1] into list of images
+            mean = config['img_mean'].view(1, -1, 1, 1).to(v_true.device)
+            std = config['img_std'].view(1, -1, 1, 1).to(v_true.device)
+            vis_data_true = (v_true * std + mean).clamp(min=0, max=1)
+            vis_data_inpainted = (v_list[-1][1] * std + mean).clamp(min=0, max=1)
+
+            transform = transforms.ToPILImage()
+            for i in range(v_true.shape[0]):
+                # ground truth
+                pil_image = transform(vis_data_true[i])
+                image_name = f"gt_image_{i+1}.jpg" 
+                pil_image.save(os.path.join(f"{save_folder}/gt/", image_name))
+                
+                # inpainted
+                pil_image = transform(vis_data_inpainted[i])
+                image_name = f"inpainted_image_{i+1}.jpg" 
+                pil_image.save(os.path.join(f"{save_folder}/inpainted/", image_name))
 
     if 'GMM' in config['dataset']:
         samples = v_list[-1][1].view(B, -1).cpu().numpy()
