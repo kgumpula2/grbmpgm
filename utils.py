@@ -118,6 +118,7 @@ def visualize_sampling(model, epoch, config, tag=None, is_show_gif=True, test_lo
             for i in range(4):
                 v_true_i, _ = next(iter(test_loader))
                 v_true = torch.cat((v_true, v_true_i), dim=0)
+            B *= 5
 
         v_true = v_true.cuda()
         if config['mask']:
@@ -152,7 +153,7 @@ def visualize_sampling(model, epoch, config, tag=None, is_show_gif=True, test_lo
                             v_true=v_true)
     
     if test_loader and mask is not None:
-        calc_mask_mse_loss(epoch, v_list[-1][1], mask, v_true)
+        calc_mask_mse_loss(v_list[-1][1], mask, v_true)
 
         if shortcut_mse_calculation:
             return
