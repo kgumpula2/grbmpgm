@@ -21,7 +21,8 @@ class GRBM(nn.Module):
                  Langevin_eta=1.0,
                  is_anneal_Langevin=True,
                  Langevin_adjust_step=0,
-                 deep_hidden_sizes=None) -> None:
+                 deep_hidden_sizes=None,
+                 is_cuda=False) -> None:
         super().__init__()
         # we use samples in [CD_burnin, CD_step) steps
         assert CD_burnin >= 0 and CD_burnin <= CD_step
@@ -38,6 +39,7 @@ class GRBM(nn.Module):
         self.is_anneal_Langevin = is_anneal_Langevin
         self.Langevin_adjust_step = Langevin_adjust_step
         self.go_deep = False
+        self.is_cuda = is_cuda
 
         self.W = nn.Parameter(torch.Tensor(visible_size, hidden_size))
         self.b = nn.Parameter(torch.Tensor(hidden_size))
@@ -51,6 +53,8 @@ class GRBM(nn.Module):
             last_size = hidden_size
             for hidden_size in deep_hidden_sizes:
                 self.deep_rbms.append(RBM(n_vis=last_size, n_hid=hidden_size))
+                if self.is_cuda:
+                    self.deep_rbms[-1].cuda()
                 last_size = hidden_size
         
 
@@ -311,8 +315,6 @@ class GRBM(nn.Module):
 
     @torch.no_grad()
     def sampling(self, v_init, num_steps=1, save_gap=1, mask=None, v_true=None):
-        if len(self.deep_rbms) > 0:
-            self.go_deep = True
         v_shape = v_init.shape
         v = v_init.view(v_shape[0], -1)
         var = self.get_var()
@@ -356,7 +358,6 @@ class GRBM(nn.Module):
             if mask is not None and v_true is not None:
                 v_list[i] = (ind, torch.where(mask.view(v_shape) == 0, v_true.view(v_shape), v))
 
-        self.go_deep = False
         return v_list
 
     @torch.no_grad()

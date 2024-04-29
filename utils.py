@@ -107,7 +107,7 @@ def calc_mask_mse_loss(samples, mask, v_true):
     wandb.log({"l2 mask loss": F.mse_loss(samples_masked, v_true_masked).item()})
 
 
-def visualize_sampling(model, epoch, config, tag=None, is_show_gif=True, test_loader=None, shortcut_mse_calculation=False):
+def visualize_sampling(model, epoch, config, tag=None, is_show_gif=True, test_loader=None, shortcut_mse_calculation=False, after_finetune=False):
     tag = '' if tag is None else tag
     B, C, H, W = config['sampling_batch_size'], config['channel'], config[
         'height'], config['width']
@@ -158,8 +158,9 @@ def visualize_sampling(model, epoch, config, tag=None, is_show_gif=True, test_lo
         if shortcut_mse_calculation:
             return
 
-        save_folder = f"{config['exp_folder']}/final_images"
-        if epoch % config['save_interval'] == 0:
+        
+        if epoch % config['save_interval'] == 0 or epoch == config['epochs'] or after_finetune:
+            save_folder = f"{config['exp_folder']}/final_images" if not after_finetune else f"{config['exp_folder']}/final_images_after_finetune"
             if not os.path.exists(save_folder):
                 os.makedirs(f"{save_folder}/gt")
                 os.makedirs(f"{save_folder}/inpainted")

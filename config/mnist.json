@@ -3,7 +3,7 @@
     "cuda": true,
     "model": "GRBM",
     "batch_size": 512,
-    "epochs": 25,
+    "epochs": 22,
     "lr": 0.01,
     "clip_norm": 10.0,
     "wd": 0.0,

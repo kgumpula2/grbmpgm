@@ -15,7 +15,7 @@ class RBM(nn.Module):
         k (int, optional): The number of Gibbs sampling. Defaults to 1.
     """
 
-    def __init__(self, n_vis=784, n_hid=128, k=1):
+    def __init__(self, n_vis=784, n_hid=128, k=1, device='cpu'):
         """Create a RBM."""
         super(RBM, self).__init__()
         self.visible_size = n_vis
