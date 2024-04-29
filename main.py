@@ -13,8 +13,6 @@ from grbm import GRBM
 import wandb
 import torch.nn.functional as F
 
-# matplotlib.use('TkAgg')
-
 EPS = 1e-7
 SEED = 1234
 torch.manual_seed(SEED)
@@ -113,6 +111,17 @@ def create_dataset(config):
                                                              config['img_std'])
                                     ]))
         train_set = torch.utils.data.Subset(train_set, range(2000))
+        test_set = datasets.CelebA('./data',
+                                    split='test',
+                                    download=False,
+                                    transform=transforms.Compose([
+                                        transforms.CenterCrop(
+                                            config['crop_size']),
+                                        transforms.Resize(config['height']),
+                                        transforms.ToTensor(),
+                                        transforms.Normalize(config['img_mean'],
+                                                             config['img_std'])
+                                    ]))
     elif config['dataset'] == 'FashionMNIST':
         train_set = datasets.FashionMNIST('./data',
                                           train=True,
@@ -145,14 +154,14 @@ def train_model(args):
         config = json.load(json_file)
 
 
+    wandb_mode = None if args.use_wandb else 'disabled'
     # start a new wandb run to track this script
     wandb.init(
         # set the wandb project where this run will be logged
         project="PGM",
         # track hyperparameters and run metadata
         config=config,
-        # disable
-        # mode="disabled",
+        mode=wandb_mode,
     )
 
     # kludgey check for inpainting config
@@ -310,6 +319,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--dataset', type=str, default='mnist',
                         help='Dataset name {gmm_iso, gmm_aniso, mnist, fashionmnist, celeba, celeba2K}')
+    parser.add_argument('--use_wandb', action='store_true', default=False)
     args = parser.parse_args()
 
     train_model(args)

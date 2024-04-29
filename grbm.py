@@ -6,8 +6,6 @@ from utils import cosine_schedule
 import matplotlib.pyplot as plt
 import matplotlib
 
-matplotlib.use('TkAgg')
-
 class GRBM(nn.Module):
     """ Gaussian-Bernoulli Restricted Boltzmann Machines (GRBM) """
 

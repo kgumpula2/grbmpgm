@@ -34,7 +34,8 @@
     "vis_interval": 5,
     "save_interval": 10,
     "hidden_size": 4096,
-    "mask": "top_half",
+    "mask": "center",
+    "center_crop_mask_size": 12,
     "randomize_mask": true,
     "do_inpainting": true
 }
