@@ -5,6 +5,7 @@ import numpy as np
 from utils import cosine_schedule
 import matplotlib.pyplot as plt
 import matplotlib
+from rbm import RBM
 
 matplotlib.use('TkAgg')
 
@@ -21,7 +22,8 @@ class GRBM(nn.Module):
                  Langevin_step=10,
                  Langevin_eta=1.0,
                  is_anneal_Langevin=True,
-                 Langevin_adjust_step=0) -> None:
+                 Langevin_adjust_step=0,
+                 deep_hidden_sizes=None) -> None:
         super().__init__()
         # we use samples in [CD_burnin, CD_step) steps
         assert CD_burnin >= 0 and CD_burnin <= CD_step
@@ -37,12 +39,22 @@ class GRBM(nn.Module):
         self.Langevin_eta = Langevin_eta
         self.is_anneal_Langevin = is_anneal_Langevin
         self.Langevin_adjust_step = Langevin_adjust_step
+        self.go_deep = False
 
         self.W = nn.Parameter(torch.Tensor(visible_size, hidden_size))
         self.b = nn.Parameter(torch.Tensor(hidden_size))
         self.mu = nn.Parameter(torch.Tensor(visible_size))
         self.log_var = nn.Parameter(torch.Tensor(visible_size))
         self.reset_parameters()
+
+        # these are all stacked normal Bernoulli RBM layers
+        self.deep_rbms = []
+        if deep_hidden_sizes is not None:
+            last_size = hidden_size
+            for hidden_size in deep_hidden_sizes:
+                self.deep_rbms.append(RBM(n_vis=last_size, n_hid=hidden_size))
+                last_size = hidden_size
+        
 
     def reset_parameters(self):
         nn.init.normal_(self.W,
@@ -122,11 +134,25 @@ class GRBM(nn.Module):
 
     @torch.no_grad()
     def prob_h_given_v(self, v, var):
-        return torch.sigmoid((v / var).mm(self.W) + self.b)
+        h = torch.sigmoid((v / var).mm(self.W) + self.b)
+        if self.go_deep:
+            deep_h = self.h_to_deep_h(h)
+            h = self.deep_h_to_h(deep_h)
+        return h
 
     @torch.no_grad()
     def prob_v_given_h(self, h):
         return h.mm(self.W.T) + self.mu
+    
+    def h_to_deep_h(self, h):
+        for rbm in self.deep_rbms:
+            h = rbm.visible_to_hidden(h)
+        return h
+    
+    def deep_h_to_h(self, h):
+        for rbm in reversed(self.deep_rbms):
+            h = rbm.hidden_to_visible(h)
+        return h
 
     @torch.no_grad()
     def log_metropolis_ratio_Gibbs_Langevin(self, v_old, h_old, v_new, h_new, eta_list):
@@ -287,6 +313,8 @@ class GRBM(nn.Module):
 
     @torch.no_grad()
     def sampling(self, v_init, num_steps=1, save_gap=1, mask=None, v_true=None):
+        if len(self.deep_rbms) > 0:
+            self.go_deep = True
         v_shape = v_init.shape
         v = v_init.view(v_shape[0], -1)
         var = self.get_var()
@@ -330,6 +358,7 @@ class GRBM(nn.Module):
             if mask is not None and v_true is not None:
                 v_list[i] = (ind, torch.where(mask.view(v_shape) == 0, v_true.view(v_shape), v))
 
+        self.go_deep = False
         return v_list
 
     @torch.no_grad()
@@ -388,4 +417,3 @@ class GRBM(nn.Module):
         # compute update
         for name, param in self.named_parameters():
             param.grad = grad_pos[name] - grad_neg[name]
-

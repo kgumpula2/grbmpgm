@@ -12,7 +12,7 @@ from gmm import GMM, GMMDataset
 from grbm import GRBM
 import wandb
 import torch.nn.functional as F
-
+from rbm import RBM, train_rbm
 # matplotlib.use('TkAgg')
 
 EPS = 1e-7
@@ -31,6 +31,19 @@ def load(model, results_folder, epoch):
     data = torch.load(f'{results_folder}/model-{epoch}.pt')
     model.load_state_dict(data['model'])
 
+class DataLoaderWrapper:
+    def __init__(self, loader, transform=None):
+        self.loader = loader
+        self.transform = transform
+
+    def __iter__(self):
+        for batch in self.loader:
+            if self.transform:
+                batch = self.transform(batch)
+            yield batch
+
+    def __len__(self):
+        return len(self.loader)
 
 def train(model,
           train_loader,
@@ -162,6 +175,8 @@ def train_model(args):
         config['mask'] = None
     if 'randomize_mask' not in config:
         config['randomize_mask'] = False
+    if 'deep_hidden_sizes' not in config:
+        config['deep_hidden_sizes'] = None
 
     config['exp_folder'] = f"exp/inpainting={config['do_inpainting']}_{config['dataset']}_{config['model']}_{pid}_inference={config['inference_method']}_H={config['hidden_size']}_B={config['batch_size']}_CD={config['CD_step']}"
     
@@ -198,7 +213,8 @@ def train_model(args):
                  Langevin_step=config['Langevin_step'],
                  Langevin_eta=config['Langevin_eta'],
                  is_anneal_Langevin=True,
-                 Langevin_adjust_step=config['Langevin_adjust_step'])
+                 Langevin_adjust_step=config['Langevin_adjust_step'],
+                 deep_hidden_sizes=config['deep_hidden_sizes'],)
 
     if config['cuda']:
         model.cuda()
@@ -302,6 +318,21 @@ def train_model(args):
             save(model, config['exp_folder'], epoch)
 
         scheduler.step()
+
+    if config['deep_hidden_sizes'] is not None:
+        # now we can train rest of the network freezing the first layer GRBM
+        
+        data_loader = DataLoaderWrapper(train_loader, transform=lambda x: torch.bernoulli(model.prob_h_given_v(x, model.get_var())))
+        for i in range(len(model.deep_rbms)):
+            # train one RBM layer at a time 
+            rbm = model.deep_rbms[i]
+            logger.info(f'Training Bernoulli RBM {rbm.visible_size} -> {rbm.hidden_size}')
+            epoch_loss = train_rbm(rbm, data_loader, 'cuda' if config['cuda'] else 'cpu')
+            logger.info(f'Loss over epochs: {epoch_loss}')
+            if i < len(model.deep_rbms) - 1:
+                data_loader = DataLoaderWrapper(data_loader, rbm.visible_to_hidden)
+
+        
 
 
 if __name__ == '__main__':

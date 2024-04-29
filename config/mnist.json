@@ -3,7 +3,7 @@
     "cuda": true,
     "model": "GRBM",
     "batch_size": 512,
-    "epochs": 3000,
+    "epochs": 25,
     "lr": 0.01,
     "clip_norm": 10.0,
     "wd": 0.0,
@@ -36,5 +36,6 @@
     "hidden_size": 4096,
     "mask": "top_half",
     "randomize_mask": true,
-    "do_inpainting": true
+    "do_inpainting": true,
+    "deep_hidden_sizes": [2048, 1024, 512]
 }
