@@ -9,8 +9,10 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt  # NOQA
 from PIL import Image  # NOQA
+import torchvision.transforms as transforms
 import wandb
 import torch.nn.functional as F
+import os
 
 sns.set_theme(style="darkgrid")
 
@@ -97,20 +99,27 @@ def save_gif_fancy(imgs, nrow, save_name):
              loop=0)
     
 
-def calc_mask_accuracy(epoch, samples, mask, v_true):
+def calc_mask_mse_loss(samples, mask, v_true):
     # only calculate MSE loss for region where mask == 1
     samples_masked = samples[mask == 1]
     v_true_masked = v_true[mask == 1]
 
-    wandb.log({"epoch": epoch, "l2 mask loss": F.mse_loss(samples_masked, v_true_masked).item()})
+    wandb.log({"l2 mask loss": F.mse_loss(samples_masked, v_true_masked).item()})
 
 
-def visualize_sampling(model, epoch, config, tag=None, is_show_gif=True, test_loader=None):
+def visualize_sampling(model, epoch, config, tag=None, is_show_gif=True, test_loader=None, shortcut_mse_calculation=False):
     tag = '' if tag is None else tag
     B, C, H, W = config['sampling_batch_size'], config['channel'], config[
         'height'], config['width']
     if test_loader:
         v_true, _ = next(iter(test_loader))
+        # kludgey, stack 5 of the items in test_loader
+        if shortcut_mse_calculation:
+            for i in range(4):
+                v_true_i, _ = next(iter(test_loader))
+                v_true = torch.cat((v_true, v_true_i), dim=0)
+            B *= 5
+
         v_true = v_true.cuda()
         if config['mask']:
             mask = torch.zeros(B, C, H, W).cuda()
@@ -124,7 +133,7 @@ def visualize_sampling(model, epoch, config, tag=None, is_show_gif=True, test_lo
                 mask[:, :, :, W // 2:] = 1
             elif config['mask'] == 'center':
                 # half of side of square
-                center_crop_pixel = 5
+                center_crop_pixel = config['center_crop_mask_size'] // 2
                 mask[:, :, H // 2 - center_crop_pixel:H // 2 + center_crop_pixel, W // 2 - center_crop_pixel:W // 2 + center_crop_pixel] = 1
             else:
                 raise ValueError(f"Unknown mask type: {config['mask']}")
@@ -144,7 +153,34 @@ def visualize_sampling(model, epoch, config, tag=None, is_show_gif=True, test_lo
                             v_true=v_true)
     
     if test_loader and mask is not None:
-        calc_mask_accuracy(epoch, v_list[-1][1], mask, v_true)
+        calc_mask_mse_loss(v_list[-1][1], mask, v_true)
+
+        if shortcut_mse_calculation:
+            return
+
+        save_folder = f"{config['exp_folder']}/final_images"
+        if epoch % config['save_interval'] == 0:
+            if not os.path.exists(save_folder):
+                os.makedirs(f"{save_folder}/gt")
+                os.makedirs(f"{save_folder}/inpainted")
+
+            # save v_list[-1][1] into list of images
+            mean = config['img_mean'].view(1, -1, 1, 1).to(v_true.device)
+            std = config['img_std'].view(1, -1, 1, 1).to(v_true.device)
+            vis_data_true = (v_true * std + mean).clamp(min=0, max=1)
+            vis_data_inpainted = (v_list[-1][1] * std + mean).clamp(min=0, max=1)
+
+            transform = transforms.ToPILImage()
+            for i in range(v_true.shape[0]):
+                # ground truth
+                pil_image = transform(vis_data_true[i])
+                image_name = f"gt_image_{i+1}.jpg" 
+                pil_image.save(os.path.join(f"{save_folder}/gt/", image_name))
+                
+                # inpainted
+                pil_image = transform(vis_data_inpainted[i])
+                image_name = f"inpainted_image_{i+1}.jpg" 
+                pil_image.save(os.path.join(f"{save_folder}/inpainted/", image_name))
 
     if 'GMM' in config['dataset']:
         samples = v_list[-1][1].view(B, -1).cpu().numpy()
@@ -157,7 +193,7 @@ def visualize_sampling(model, epoch, config, tag=None, is_show_gif=True, test_lo
             save_gif_fancy(
                 v_list, config['sampling_nrow'],
                 f"{config['exp_folder']}/sample_imgs_epoch_{epoch:05d}{tag}.gif")
-            wandb.log({f"sample_imgs_epoch_{epoch:05d}{tag}.gif": wandb.Image(f"{config['exp_folder']}/sample_imgs_epoch_{epoch:05d}{tag}.gif"), 'epoch': epoch})
+            wandb.log({f"sample_imgs_epoch_{epoch:05d}{tag}.gif": wandb.Image(f"{config['exp_folder']}/sample_imgs_epoch_{epoch:05d}{tag}.gif")})
             img_vis = v_list[-1][1]
         else:
             if isinstance(config['img_std'], torch.Tensor):
@@ -176,7 +212,7 @@ def visualize_sampling(model, epoch, config, tag=None, is_show_gif=True, test_lo
                             padding=1,
                             pad_value=1.0).cpu(),
             f"{config['exp_folder']}/sample_imgs_epoch_{epoch:05d}{tag}.png")
-        wandb.log({f"sample_imgs_epoch_{epoch:05d}{tag}.png": wandb.Image(f"{config['exp_folder']}/sample_imgs_epoch_{epoch:05d}{tag}.png"), 'epoch': epoch})
+        wandb.log({f"sample_imgs_epoch_{epoch:05d}{tag}.png": wandb.Image(f"{config['exp_folder']}/sample_imgs_epoch_{epoch:05d}{tag}.png")})
 
 
 def vis_2D_samples(samples, config, tags=None):

@@ -7,8 +7,6 @@ import matplotlib.pyplot as plt
 import matplotlib
 from rbm import RBM
 
-matplotlib.use('TkAgg')
-
 class GRBM(nn.Module):
     """ Gaussian-Bernoulli Restricted Boltzmann Machines (GRBM) """
 
