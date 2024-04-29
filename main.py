@@ -262,7 +262,7 @@ def train_model(args):
                 logger.info(
                     f'PID={pid} || {epoch} epoch || var={model.get_var().mean().item()} || Reconstruction Loss = {recon_loss}'
                 )
-                wandb.log({"epoch": epoch, "reconstruction_loss": recon_loss, "var": var})
+                wandb.log({"reconstruction_loss": recon_loss, "var": var}, commit=False)
                 if test_loader is not None:
                     visualize_sampling(model, epoch, config, is_show_gif=False, test_loader=test_loader, shortcut_mse_calculation=True)
 
