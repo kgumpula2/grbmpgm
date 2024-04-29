@@ -364,87 +364,88 @@ def train_model(args):
     if len(model.deep_rbms) > 0:
         model.go_deep = True
 
-    # now we can fine tune the first layer since all the other layers are trained
-    start_epoch = config['epochs'] + 2
-    end_epoch = start_epoch + (config['epochs'] // 2)
+    if model.go_deep:
+        # now we can fine tune the first layer since all the other layers are trained
+        start_epoch = config['epochs'] + 2
+        end_epoch = start_epoch + (config['epochs'] // 2)
 
-    for epoch in range(start_epoch, end_epoch):
-        model.set_Langevin_adjust_step(config['Langevin_adjust_step'])
+        for epoch in range(start_epoch, end_epoch):
+            model.set_Langevin_adjust_step(config['Langevin_adjust_step'])
 
-        recon_loss = train(model,
-                           train_loader,
-                           optimizer,
-                           config)
+            recon_loss = train(model,
+                            train_loader,
+                            optimizer,
+                            config)
 
-        var = model.get_var().detach().cpu().numpy()
+            var = model.get_var().detach().cpu().numpy()
 
-        # show samples periodically
-        if epoch % config['log_interval'] == 0:
-            if 'GMM' in config['dataset']:
-                logger.info(
-                    f'PID={pid} || {epoch} epoch || mean = {model.mu.detach().cpu().numpy()} || var={model.get_var().detach().cpu().numpy()} || Reconstruction Loss = {recon_loss}'
-                )
-            else:
-                logger.info(
-                    f'PID={pid} || {epoch} epoch || var={model.get_var().mean().item()} || Reconstruction Loss = {recon_loss}'
-                )
-                wandb.log({"reconstruction_loss": recon_loss, "var": var}, commit=False)
-                if test_loader is not None:
-                    visualize_sampling(model, epoch, config, is_show_gif=False, test_loader=test_loader, shortcut_mse_calculation=True)
+            # show samples periodically
+            if epoch % config['log_interval'] == 0:
+                if 'GMM' in config['dataset']:
+                    logger.info(
+                        f'PID={pid} || {epoch} epoch || mean = {model.mu.detach().cpu().numpy()} || var={model.get_var().detach().cpu().numpy()} || Reconstruction Loss = {recon_loss}'
+                    )
+                else:
+                    logger.info(
+                        f'PID={pid} || {epoch} epoch || var={model.get_var().mean().item()} || Reconstruction Loss = {recon_loss}'
+                    )
+                    wandb.log({"reconstruction_loss": recon_loss, "var": var}, commit=False)
+                    if test_loader is not None:
+                        visualize_sampling(model, epoch, config, is_show_gif=False, test_loader=test_loader, shortcut_mse_calculation=True)
 
-        if epoch % config['vis_interval'] == 0:
-            visualize_sampling(model,
-                                epoch,
-                                config,
-                                is_show_gif=True,
-                                test_loader=test_loader)
+            if epoch % config['vis_interval'] == 0:
+                visualize_sampling(model,
+                                    epoch,
+                                    config,
+                                    is_show_gif=True,
+                                    test_loader=test_loader)
 
-            # visualize one mini-batch of training data
-            if not is_show_training_data and 'GMM' not in config['dataset']:
-                data, _ = next(iter(train_loader))
-                mean = config['img_mean'].view(1, -1, 1, 1).to(data.device)
-                std = config['img_std'].view(1, -1, 1, 1).to(data.device)
-                vis_data = (data * std + mean).clamp(min=0, max=1)
-                utils.save_image(
-                    utils.make_grid(vis_data,
-                                    nrow=config['sampling_nrow'],
-                                    normalize=False,
-                                    padding=1,
-                                    pad_value=1.0).cpu(),
-                    f"{config['exp_folder']}/training_imgs.png")
-                is_show_training_data = True
+                # visualize one mini-batch of training data
+                if not is_show_training_data and 'GMM' not in config['dataset']:
+                    data, _ = next(iter(train_loader))
+                    mean = config['img_mean'].view(1, -1, 1, 1).to(data.device)
+                    std = config['img_std'].view(1, -1, 1, 1).to(data.device)
+                    vis_data = (data * std + mean).clamp(min=0, max=1)
+                    utils.save_image(
+                        utils.make_grid(vis_data,
+                                        nrow=config['sampling_nrow'],
+                                        normalize=False,
+                                        padding=1,
+                                        pad_value=1.0).cpu(),
+                        f"{config['exp_folder']}/training_imgs.png")
+                    is_show_training_data = True
 
-            # visualize filters & hidden states
-            if config['is_vis_verbose']:
-                filters = model.W.T.view(model.W.shape[1], config['channel'],
-                                            config['height'], config['width'])
-                utils.save_image(
-                    filters,
-                    f"{config['exp_folder']}/filters_epoch_{epoch:05d}.png",
-                    nrow=8,
-                    normalize=True,
-                    padding=1,
-                    pad_value=1.0)
+                # visualize filters & hidden states
+                if config['is_vis_verbose']:
+                    filters = model.W.T.view(model.W.shape[1], config['channel'],
+                                                config['height'], config['width'])
+                    utils.save_image(
+                        filters,
+                        f"{config['exp_folder']}/filters_epoch_{epoch:05d}.png",
+                        nrow=8,
+                        normalize=True,
+                        padding=1,
+                        pad_value=1.0)
 
-                # visualize hidden states
-                data, _ = next(iter(train_loader))
-                h_pos = model.prob_h_given_v(
-                    data.view(data.shape[0], -1).cuda(), model.get_var())
-                utils.save_image(h_pos.view(1, 1, -1, config['hidden_size']),
-                                    f"{config['exp_folder']}/hidden_epoch_{epoch:05d}.png",
-                                    normalize=True)
+                    # visualize hidden states
+                    data, _ = next(iter(train_loader))
+                    h_pos = model.prob_h_given_v(
+                        data.view(data.shape[0], -1).cuda(), model.get_var())
+                    utils.save_image(h_pos.view(1, 1, -1, config['hidden_size']),
+                                        f"{config['exp_folder']}/hidden_epoch_{epoch:05d}.png",
+                                        normalize=True)
 
-        # save models periodically
-        if epoch % config['save_interval'] == 0:
-            save(model, config['exp_folder'], epoch)
+            # save models periodically
+            if epoch % config['save_interval'] == 0:
+                save(model, config['exp_folder'], epoch)
 
 
-    visualize_sampling(model,
-                        99999,
-                        config,
-                        is_show_gif=True,
-                        test_loader=test_loader,
-                        after_finetune=True)
+        visualize_sampling(model,
+                            99999,
+                            config,
+                            is_show_gif=True,
+                            test_loader=test_loader,
+                            after_finetune=True)
 
 
 if __name__ == '__main__':
