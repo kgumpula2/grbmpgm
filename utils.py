@@ -159,7 +159,7 @@ def visualize_sampling(model, epoch, config, tag=None, is_show_gif=True, test_lo
             return
 
         
-        if epoch % config['save_interval'] == 0 or epoch == config['epochs'] or after_finetune:
+        if epoch == config['epochs'] or after_finetune:
             save_folder = f"{config['exp_folder']}/final_images" if not after_finetune else f"{config['exp_folder']}/final_images_after_finetune"
             if not os.path.exists(save_folder):
                 os.makedirs(f"{save_folder}/gt")

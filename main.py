@@ -116,6 +116,8 @@ def create_dataset(config):
                                         transforms.Normalize(config['img_mean'],
                                                              config['img_std'])
                                     ]))
+        # for now due to limited compute coz of high K and deep architecture
+        train_set = torch.utils.data.Subset(train_set, range(4000))
         test_set = datasets.CelebA('./data',
                                     split='test',
                                     download=False,
@@ -188,6 +190,7 @@ def train_model(args):
     wandb.init(
         # set the wandb project where this run will be logged
         project="PGM",
+        entity="vlr-3dmamba",
         # track hyperparameters and run metadata
         config=config,
         mode=wandb_mode,
@@ -201,6 +204,8 @@ def train_model(args):
     if 'randomize_mask' not in config:
         config['randomize_mask'] = False
     if 'deep_hidden_sizes' not in config:
+        config['deep_hidden_sizes'] = None
+    if args.disable_deep:
         config['deep_hidden_sizes'] = None
 
     config['exp_folder'] = f"exp/inpainting={config['do_inpainting']}_{config['dataset']}_{config['model']}_{pid}_inference={config['inference_method']}_H={config['hidden_size']}_B={config['batch_size']}_CD={config['CD_step']}"
@@ -300,7 +305,7 @@ def train_model(args):
                 if test_loader is not None:
                     visualize_sampling(model, epoch, config, is_show_gif=False, test_loader=test_loader, shortcut_mse_calculation=True)
 
-        if epoch % config['vis_interval'] == 0:
+        if epoch % config['vis_interval'] == 0 or epoch == config['epochs']:
             visualize_sampling(model,
                                 epoch,
                                 config,
@@ -343,7 +348,7 @@ def train_model(args):
                                     normalize=True)
 
         # save models periodically
-        if epoch % config['save_interval'] == 0:
+        if epoch == config['epochs']:
             save(model, config['exp_folder'], epoch)
 
         scheduler.step()
@@ -356,8 +361,10 @@ def train_model(args):
             # train one RBM layer at a time 
             rbm = model.deep_rbms[i]
             logger.info(f'Training Bernoulli RBM {rbm.visible_size} -> {rbm.hidden_size}')
-            epoch_loss = train_rbm(rbm, data_loader, 'cuda' if config['cuda'] else 'cpu')
-            logger.info(f'Loss over epochs: {epoch_loss}')
+            epoch_losses = train_rbm(rbm, data_loader, 'cuda' if config['cuda'] else 'cpu')
+            loss_data = {'epoch_{}'.format(i+1): loss for i, loss in enumerate(epoch_losses)}
+            wandb.log(loss_data)
+            logger.info(f'Loss over epochs: {epoch_losses}')
             if i < len(model.deep_rbms) - 1:
                 data_loader = DataLoaderWrapper(data_loader, rbm.visible_to_hidden)
 
@@ -436,9 +443,8 @@ def train_model(args):
                                         normalize=True)
 
             # save models periodically
-            if epoch % config['save_interval'] == 0:
+            if epoch == end_epoch - 1:
                 save(model, config['exp_folder'], epoch)
-
 
         visualize_sampling(model,
                             99999,
@@ -453,6 +459,7 @@ if __name__ == '__main__':
     parser.add_argument('-d', '--dataset', type=str, default='mnist',
                         help='Dataset name {gmm_iso, gmm_aniso, mnist, fashionmnist, celeba, celeba2K}')
     parser.add_argument('--use_wandb', action='store_true', default=False)
+    parser.add_argument('--disable_deep', action='store_true', default=False)
     args = parser.parse_args()
 
     train_model(args)

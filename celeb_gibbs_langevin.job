@@ -1,0 +1,15 @@
+#!/bin/bash
+
+#SBATCH --nodes=1
+#SBATCH --job-name=celeba_gibbs_langevin
+#SBATCH --partition=talwalkar_reserved
+#SBATCH --mem=24GB
+#SBATCH --time=30:00:00
+#SBATCH --gres=gpu:1
+#SBATCH -o out_logs/celeb_gibbs_langevin2.log
+
+eval "$(conda shell.bash hook)"
+conda activate vlrhw2
+
+# python3 main.py --dataset=celeba --use_wandb --disable_deep
+python3 main.py --dataset=celeba --use_wandb

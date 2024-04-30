@@ -102,7 +102,7 @@ class RBM(nn.Module):
             
         return v, v_gibb, intermediate
     
-def train_rbm(model, train_loader, device, n_epochs=20, lr=0.001,k=None):
+def train_rbm(model, train_loader, device, n_epochs=50, lr=0.001,k=None):
     r"""Train a RBM model.
 
     Args:
