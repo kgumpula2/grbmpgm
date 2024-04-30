@@ -2,6 +2,8 @@
 Code in this repo is adapted to do semantic image inpainting instead of unconditional image generation. We also extend the architecture in the codebase to be deep instead of a single hidden layer. 
 To run code, follow instructions given for the base code and use any of the semantic inpainting config parameters at the end of the config file (take mnist.json as an example). Citations to original codebase are maintained in README. 
 
+Datasets are referenced in the code. Setting download=True will download the datasets directly. This can be found in the main.py file. The datasets used are the standard MNIST, FashionMNIST, and CelebA datasets.
+
 # Gaussian-Bernoulli Restricted Boltzmann Machines (GRBMs)
 This is the official PyTorch implementation of [Gaussian-Bernoulli RBMs Without Tears](https://arxiv.org/abs/2210.10318) as described in the following paper:
 
